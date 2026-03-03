@@ -1,4 +1,6 @@
-# Session Renderer
+# Copilot Session Explorer
+
+> **[Live Demo](https://mitsha-microsoft.github.io/copilot-session-explorer/)** — drop any `.jsonl` session file to try it
 
 A terminal-style session history viewer built with [xterm.js](https://xtermjs.org/). It plays back `.jsonl` session files from Copilot CLI (or similar terminal AI agents) with distinct visual styling per event type, playback controls, timeline scrubbing, search, and event filtering.
 
