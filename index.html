@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Session Renderer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar">
+      <div class="toolbar-left">
+        <label id="file-label" class="file-picker-btn" title="Load a .jsonl session file">
+          📂 Load Session
+          <input type="file" id="file-input" accept=".jsonl" />
+        </label>
+        <span id="session-info" class="session-badge"></span>
+      </div>
+      <div class="toolbar-center">
+        <button id="btn-prev-turn" class="ctrl-btn" title="Previous user message (Shift+←)" disabled>⏮</button>
+        <button id="btn-prev" class="ctrl-btn" title="Previous event (←)" disabled>◀</button>
+        <button id="btn-play" class="ctrl-btn" title="Play / Pause (Space)" disabled>▶</button>
+        <button id="btn-next" class="ctrl-btn" title="Next event (→)" disabled>▶</button>
+        <button id="btn-next-turn" class="ctrl-btn" title="Next user message (Shift+→)" disabled>⏭</button>
+        <button id="btn-restart" class="ctrl-btn" title="Restart (R)" disabled>⏹</button>
+      </div>
+      <div class="toolbar-right">
+        <div class="filter-group" title="Toggle event categories">
+          <button id="filter-tools" class="filter-btn active" data-category="tools">⚙ Tools</button>
+          <button id="filter-reasoning" class="filter-btn active" data-category="reasoning">💭 Think</button>
+          <button id="filter-system" class="filter-btn active" data-category="system">ℹ Sys</button>
+        </div>
+        <label class="speed-label" title="Playback speed">
+          🏎️ <span id="speed-display">1x</span>
+          <input type="range" id="speed-slider" min="1" max="50" value="1" step="1" />
+        </label>
+        <span id="progress" class="progress-badge">0 / 0</span>
+        <button id="btn-help" class="ctrl-btn help-btn" title="Keyboard shortcuts (?)">?</button>
+      </div>
+    </header>
+
+    <!-- Timeline scrubber -->
+    <div id="scrubber-bar">
+      <input type="range" id="scrubber" min="0" max="0" value="0" step="1" disabled />
+      <div id="scrubber-markers"></div>
+    </div>
+
+    <main id="main-area">
+      <div class="terminal-window">
+        <div class="terminal-titlebar">
+          <div class="titlebar-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <span class="titlebar-title" id="titlebar-title">Session Playback</span>
+          <div class="titlebar-spacer"></div>
+        </div>
+        <div id="terminal-container"></div>
+      </div>
+
+      <!-- Search bar -->
+      <div id="search-bar" class="search-bar hidden">
+        <input type="text" id="search-input" placeholder="Search events…" autocomplete="off" />
+        <div class="search-scopes">
+          <label class="search-scope"><input type="checkbox" id="scope-user" checked /> User</label>
+          <label class="search-scope"><input type="checkbox" id="scope-assistant" checked /> Assistant</label>
+          <label class="search-scope"><input type="checkbox" id="scope-tools" checked /> Tools</label>
+        </div>
+        <span id="search-count" class="search-count"></span>
+        <button id="search-prev" class="ctrl-btn small" title="Previous match">▲</button>
+        <button id="search-next" class="ctrl-btn small" title="Next match">▼</button>
+        <button id="search-close" class="ctrl-btn small" title="Close (Esc)">✕</button>
+      </div>
+    </main>
+
+    <div id="drop-overlay" class="drop-overlay hidden">
+      <div class="drop-message">Drop .jsonl file here</div>
+    </div>
+
+    <!-- Keyboard shortcuts overlay -->
+    <div id="help-overlay" class="overlay hidden">
+      <div class="overlay-content">
+        <h2>Keyboard Shortcuts</h2>
+        <table class="shortcuts-table">
+          <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
+          <tr><td><kbd>→</kbd></td><td>Next event</td></tr>
+          <tr><td><kbd>←</kbd></td><td>Previous event</td></tr>
+          <tr><td><kbd>Shift+→</kbd></td><td>Next user message</td></tr>
+          <tr><td><kbd>Shift+←</kbd></td><td>Previous user message</td></tr>
+          <tr><td><kbd>↑</kbd></td><td>Increase speed</td></tr>
+          <tr><td><kbd>↓</kbd></td><td>Decrease speed</td></tr>
+          <tr><td><kbd>R</kbd></td><td>Restart</td></tr>
+          <tr><td><kbd>T</kbd></td><td>Toggle tools</td></tr>
+          <tr><td><kbd>Y</kbd></td><td>Toggle reasoning</td></tr>
+          <tr><td><kbd>I</kbd></td><td>Toggle system info</td></tr>
+          <tr><td><kbd>F</kbd></td><td>Open search</td></tr>
+          <tr><td><kbd>?</kbd></td><td>This help</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close overlay / search</td></tr>
+        </table>
+        <p class="overlay-hint">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-search@0.15.0/lib/addon-search.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
