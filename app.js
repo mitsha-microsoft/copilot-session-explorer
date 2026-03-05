@@ -1131,34 +1131,73 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', () => fitAddon.fit());
   new ResizeObserver(() => fitAddon.fit()).observe(termContainer);
 
-  // Welcome message with ASCII art
-  const logo = [
-    '',
-    '       ██████╗  ██████╗ ██████╗ ██╗██╗      ██████╗ ████████╗',
-    '      ██╔════╝ ██╔═══██╗██╔══██╗██║██║     ██╔═══██╗╚══██╔══╝',
-    '      ██║      ██║   ██║██████╔╝██║██║     ██║   ██║   ██║   ',
-    '      ██║      ██║   ██║██╔═══╝ ██║██║     ██║   ██║   ██║   ',
-    '      ╚██████╗ ╚██████╔╝██║     ██║███████╗╚██████╔╝   ██║   ',
-    '       ╚═════╝  ╚═════╝ ╚═╝     ╚═╝╚══════╝ ╚═════╝    ╚═╝   ',
+  // Welcome message with ASCII art — centered in terminal
+  const logoLines = [
+    '██████╗  ██████╗ ██████╗ ██╗██╗      ██████╗ ████████╗',
+    '██╔════╝ ██╔═══██╗██╔══██╗██║██║     ██╔═══██╗╚══██╔══╝',
+    '██║      ██║   ██║██████╔╝██║██║     ██║   ██║   ██║   ',
+    '██║      ██║   ██║██╔═══╝ ██║██║     ██║   ██║   ██║   ',
+    '╚██████╗ ╚██████╔╝██║     ██║███████╗╚██████╔╝   ██║   ',
+    ' ╚═════╝  ╚═════╝ ╚═╝     ╚═╝╚══════╝ ╚═════╝    ╚═╝   ',
   ];
-  const tagline = '              S E S S I O N    E X P L O R E R';
+  const tagline = 'S E S S I O N    E X P L O R E R';
+  const infoLines = [
+    'Load a .jsonl session file to begin playback.',
+    'Drag & drop or click "Load Session" above.',
+    '',
+    '─── How to get your session file ───',
+    '',
+  ];
+  const stepLines = [
+    { num: '1. ', text: 'Run ', hl: '/session', after: ' in your Copilot CLI session' },
+    { num: '2. ', text: 'Copy the path to the ', hl: 'events.jsonl', after: ' file shown in the output' },
+    { num: '3. ', text: 'Load it here via drag & drop or the file picker', hl: '', after: '' },
+  ];
+  const footer = 'Press ? for keyboard shortcuts.';
 
-  for (const line of logo) {
-    term.writeln(ansi.bold(ansi.fg.brightBlue(line)));
+  // Total content height: logo(6) + tagline(1) + blank(1) + info(5) + steps(3) + blank(1) + footer(1) = 18
+  const contentHeight = logoLines.length + 1 + 1 + infoLines.length + stepLines.length + 1 + 1;
+  const topPad = Math.max(0, Math.floor((term.rows - contentHeight) / 2));
+
+  // Centering helper: pad a string to be centered in term.cols
+  const center = (s, len) => {
+    const visualLen = len !== undefined ? len : s.length;
+    const pad = Math.max(0, Math.floor((term.cols - visualLen) / 2));
+    return ' '.repeat(pad) + s;
+  };
+
+  // Vertical padding
+  for (let i = 0; i < topPad; i++) term.writeln('');
+
+  // Logo — widest line is ~57 visible chars (box-drawing chars are single-width)
+  for (const line of logoLines) {
+    term.writeln(ansi.bold(ansi.fg.brightBlue(center(line, line.length))));
   }
-  term.writeln(ansi.bold(ansi.fg.cyan(tagline)));
+
+  // Tagline
+  term.writeln(ansi.bold(ansi.fg.cyan(center(tagline))));
   term.writeln('');
-  term.writeln(ansi.dim(ansi.fg.gray('       Load a .jsonl session file to begin playback.')));
-  term.writeln(ansi.dim(ansi.fg.gray('       Drag & drop or click "📂  Load Session" above.')));
+
+  // Info lines
+  for (const line of infoLines) {
+    term.writeln(ansi.dim(ansi.fg.gray(center(line))));
+  }
+
+  // Steps
+  for (const s of stepLines) {
+    const full = s.num + s.text + s.hl + s.after;
+    const pad = ' '.repeat(Math.max(0, Math.floor((term.cols - full.length) / 2)));
+    term.writeln(
+      pad +
+      ansi.fg.cyan(s.num) +
+      ansi.fg.white(s.text) +
+      (s.hl ? ansi.bold(ansi.fg.brightYellow(s.hl)) : '') +
+      ansi.fg.white(s.after)
+    );
+  }
+
   term.writeln('');
-  term.writeln(ansi.dim(ansi.fg.gray('       ─── How to get your session file ───')));
-  term.writeln('');
-  term.writeln(ansi.fg.cyan('       1. ') + ansi.fg.white('Run ') + ansi.bold(ansi.fg.brightYellow('/session')) + ansi.fg.white(' in your Copilot CLI session'));
-  term.writeln(ansi.fg.cyan('       2. ') + ansi.fg.white('Copy the path to the ') + ansi.fg.brightYellow('events.jsonl') + ansi.fg.white(' file shown in the output'));
-  term.writeln(ansi.fg.cyan('       3. ') + ansi.fg.white('Load it here via drag & drop or the file picker'));
-  term.writeln('');
-  term.writeln(ansi.dim(ansi.fg.gray('       Press ? for keyboard shortcuts.')));
-  term.writeln('');
+  term.writeln(ansi.dim(ansi.fg.gray(center(footer))));
 
   /* ── Playback engine ──────────────────────────────────────── */
   const engine = new PlaybackEngine(term);
