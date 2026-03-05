@@ -486,9 +486,14 @@ const STYLE_MAP = {
     if (content) {
       parts.push('');
       parts.push(ansi.bold(ansi.fg.brightWhite('🤖  ASSISTANT')));
-      const cLines = wordWrap(content, 100);
+      const cLines = formatContent(content, 100);
       for (const l of cLines) {
-        parts.push(ansi.fg.white(`  ${l}`));
+        // Table lines from formatContent already contain ANSI escapes
+        if (l.includes('\x1b[')) {
+          parts.push(`  ${l}`);
+        } else {
+          parts.push(ansi.fg.white(`  ${l}`));
+        }
       }
     }
 
@@ -621,6 +626,139 @@ function wordWrap(text, maxWidth) {
     if (remaining) lines.push(remaining);
   }
   return lines;
+}
+
+/* ================================================================
+   Markdown table → box-drawing table formatter
+   ================================================================ */
+
+/**
+ * Detect whether a line is a markdown table separator (e.g. |---|---|)
+ */
+function isTableSeparator(line) {
+  return /^\|[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)*\|?\s*$/.test(line.trim());
+}
+
+/**
+ * Parse cells from a markdown table row.  Strips leading/trailing pipes and
+ * trims each cell.
+ */
+function parseTableRow(line) {
+  let s = line.trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|')) s = s.slice(0, -1);
+  return s.split('|').map(c => c.trim());
+}
+
+/**
+ * Render a parsed markdown table as box-drawing lines with ANSI styling.
+ * Returns an array of styled strings (one per output line).
+ *
+ *   ┌────────┬────────────┐
+ *   │ Header │ Header 2   │   ← bold cyan
+ *   ├────────┼────────────┤
+ *   │ cell   │ cell 2     │   ← white
+ *   └────────┴────────────┘
+ */
+function renderBoxTable(headerCells, bodyRows, colWidths) {
+  const result = [];
+  const pad = 1; // spaces around cell content
+
+  // Build horizontal rules
+  const topLine    = '┌' + colWidths.map(w => '─'.repeat(w + pad * 2)).join('┬') + '┐';
+  const midLine    = '├' + colWidths.map(w => '─'.repeat(w + pad * 2)).join('┼') + '┤';
+  const bottomLine = '└' + colWidths.map(w => '─'.repeat(w + pad * 2)).join('┴') + '┘';
+
+  const renderRow = (cells, styleFn) => {
+    const parts = cells.map((cell, i) => {
+      const padded = (cell || '').padEnd(colWidths[i]);
+      return ' ' + styleFn(padded) + ' ';
+    });
+    return ansi.dim('│') + parts.join(ansi.dim('│')) + ansi.dim('│');
+  };
+
+  result.push(ansi.dim(topLine));
+  result.push(renderRow(headerCells, s => ansi.bold(ansi.fg.brightCyan(s))));
+  result.push(ansi.dim(midLine));
+  for (const row of bodyRows) {
+    result.push(renderRow(row, s => ansi.fg.white(s)));
+  }
+  result.push(ansi.dim(bottomLine));
+
+  return result;
+}
+
+/**
+ * Process text that may contain markdown tables mixed with regular prose.
+ * Detects table regions (consecutive lines starting with |), formats them
+ * as box-drawing tables, and word-wraps everything else.
+ * Returns an array of styled/plain lines.
+ */
+function formatContent(text, maxWidth) {
+  const rawLines = text.split(/\r?\n/);
+  const output = [];
+  let i = 0;
+
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+
+    // Detect start of a table: line starts with |
+    if (line.trim().startsWith('|')) {
+      // Collect all consecutive table lines
+      const tableLines = [];
+      while (i < rawLines.length && rawLines[i].trim().startsWith('|')) {
+        tableLines.push(rawLines[i]);
+        i++;
+      }
+
+      // Need at least a header + separator + 1 body row to be a real table
+      // Find the separator row
+      let sepIdx = -1;
+      for (let t = 0; t < tableLines.length; t++) {
+        if (isTableSeparator(tableLines[t])) { sepIdx = t; break; }
+      }
+
+      if (sepIdx >= 1 && tableLines.length > sepIdx + 1) {
+        // Parse header (rows before separator, typically just one)
+        const headerCells = parseTableRow(tableLines[sepIdx - 1]);
+        const bodyRows = [];
+        for (let t = sepIdx + 1; t < tableLines.length; t++) {
+          if (isTableSeparator(tableLines[t])) continue; // skip extra separators
+          bodyRows.push(parseTableRow(tableLines[t]));
+        }
+
+        // Compute column widths
+        const colCount = Math.max(headerCells.length, ...bodyRows.map(r => r.length));
+        const colWidths = [];
+        for (let c = 0; c < colCount; c++) {
+          let maxW = (headerCells[c] || '').length;
+          for (const row of bodyRows) {
+            maxW = Math.max(maxW, (row[c] || '').length);
+          }
+          colWidths.push(maxW);
+        }
+
+        // Any lines before the header in the table block (e.g. a preceding | line)
+        for (let t = 0; t < sepIdx - 1; t++) {
+          output.push(...wordWrap(tableLines[t], maxWidth));
+        }
+
+        // Render the box table
+        output.push(...renderBoxTable(headerCells, bodyRows, colWidths));
+      } else {
+        // Not a real table, just lines starting with |, pass through
+        for (const tl of tableLines) {
+          output.push(...wordWrap(tl, maxWidth));
+        }
+      }
+    } else {
+      // Regular line — word wrap
+      output.push(...wordWrap(line, maxWidth));
+      i++;
+    }
+  }
+
+  return output;
 }
 
 /* ================================================================
