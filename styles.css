@@ -265,6 +265,24 @@ html, body {
   border: 3px dashed #7aa2f7;
   border-radius: 16px;
   padding: 48px 64px;
+  text-align: center;
+}
+
+.drop-hint {
+  font-size: 13px;
+  color: #565f89;
+  margin-top: 12px;
+}
+
+.drop-hint kbd {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #292e42;
+  border: 1px solid #3b4261;
+  border-radius: 4px;
+  font-family: 'Cascadia Code', monospace;
+  font-size: 12px;
+  color: #e0af68;
 }
 
 /* ── Help / Shortcuts Overlay ───────────────────────────────── */

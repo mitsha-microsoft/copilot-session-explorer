@@ -1133,9 +1133,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Welcome message
   term.writeln('');
-  term.writeln(ansi.bold(ansi.fg.brightBlue('  Session Renderer')));
+  term.writeln(ansi.bold(ansi.fg.brightBlue('  Copilot Session Explorer')));
+  term.writeln('');
   term.writeln(ansi.dim(ansi.fg.gray('  Load a .jsonl session file to begin playback.')));
   term.writeln(ansi.dim(ansi.fg.gray('  Drag & drop or click "📂 Load Session" above.')));
+  term.writeln('');
+  term.writeln(ansi.dim(ansi.fg.gray('  ─── How to get your session file ───')));
+  term.writeln('');
+  term.writeln(ansi.fg.cyan('  1. ') + ansi.fg.white('Run ') + ansi.bold(ansi.fg.brightYellow('/session')) + ansi.fg.white(' in your Copilot CLI session'));
+  term.writeln(ansi.fg.cyan('  2. ') + ansi.fg.white('Copy the path to the ') + ansi.fg.brightYellow('events.jsonl') + ansi.fg.white(' file shown in the output'));
+  term.writeln(ansi.fg.cyan('  3. ') + ansi.fg.white('Load it here via drag & drop or the file picker'));
+  term.writeln('');
   term.writeln(ansi.dim(ansi.fg.gray('  Press ? for keyboard shortcuts.')));
   term.writeln('');
 

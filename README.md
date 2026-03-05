@@ -6,6 +6,20 @@ A terminal-style session history viewer built with [xterm.js](https://xtermjs.or
 
 ![Screenshot](https://img.shields.io/badge/xterm.js-v5.5-blue)
 
+## Getting Your Session File
+
+1. In your **Copilot CLI** terminal session, type the `/session` slash command
+2. The output will display the session directory path containing an `events.jsonl` file
+3. Load that file into the explorer via drag & drop, the file picker, or by placing it alongside `index.html`
+
+```
+> /session
+Session ID: abc-123-def
+Session directory: ~/.copilot/sessions/abc-123-def/
+```
+
+Copy the `events.jsonl` from that directory and you're ready to go.
+
 ## Quick Start
 
 ### Option 1 — Python (simplest)
