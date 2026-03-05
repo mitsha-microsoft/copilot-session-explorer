@@ -113,6 +113,16 @@ html, body {
   font-size: 16px;
 }
 
+.github-btn {
+  text-decoration: none;
+  color: #9aa5ce;
+}
+
+.github-btn:hover {
+  color: #c0caf5;
+  border-color: #7aa2f7;
+}
+
 /* ── Filter buttons ─────────────────────────────────────────── */
 .filter-group {
   display: flex;
