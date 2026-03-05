@@ -1141,16 +1141,12 @@ document.addEventListener('DOMContentLoaded', () => {
     '      ╚██████╗ ╚██████╔╝██║     ██║███████╗╚██████╔╝   ██║   ',
     '       ╚═════╝  ╚═════╝ ╚═╝     ╚═╝╚══════╝ ╚═════╝    ╚═╝   ',
   ];
-  const sub1 = '       ╔═╗ ╔═╗ ╔═╗ ╔═╗ ╦ ╔═╗ ╔╗╔   ╔═╗ ═╗ ╦ ╔═╗ ╦   ╔═╗ ╦═╗ ╔═╗ ╦═╗';
-  const sub2 = '       ╚═╗ ║╣  ╚═╗ ╚═╗ ║ ║ ║ ║║║   ║╣   ╠╩╗ ╠═╝ ║   ║ ║ ╠╦╝ ║╣  ╠╦╝';
-  const sub3 = '       ╚═╝ ╚═╝ ╚═╝ ╚═╝ ╩ ╚═╝ ╝╚╝   ╚═╝ ╩ ╚ ╩   ╩═╝ ╚═╝ ╩╚═ ╚═╝ ╩╚═';
+  const tagline = '              S E S S I O N    E X P L O R E R';
 
   for (const line of logo) {
     term.writeln(ansi.bold(ansi.fg.brightBlue(line)));
   }
-  term.writeln(ansi.fg.cyan(sub1));
-  term.writeln(ansi.fg.cyan(sub2));
-  term.writeln(ansi.fg.cyan(sub3));
+  term.writeln(ansi.bold(ansi.fg.cyan(tagline)));
   term.writeln('');
   term.writeln(ansi.dim(ansi.fg.gray('       Load a .jsonl session file to begin playback.')));
   term.writeln(ansi.dim(ansi.fg.gray('       Drag & drop or click "📂  Load Session" above.')));
