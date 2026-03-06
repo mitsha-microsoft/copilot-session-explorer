@@ -11,3 +11,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Playwright artifacts
+.playwright-cli/
+*.png

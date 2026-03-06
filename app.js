@@ -806,6 +806,42 @@ function isRenderable(ev) {
   return RENDERABLE_TYPES.has(ev.type);
 }
 
+/**
+ * Check if an event is a sub-agent child event (tool call or assistant
+ * message running inside a background agent).
+ */
+function isSubagentChild(ev) {
+  return !!(ev.data && ev.data.parentToolCallId);
+}
+
+/**
+ * Produce a compact status line for a sub-agent child event, showing
+ * what the agent is currently doing.  Returns null for events that
+ * should not update the status (e.g. tool completions — we wait for
+ * the next start or assistant message).
+ */
+function subagentStatusLine(ev, agentName) {
+  const d = ev.data;
+  const prefix = ansi.bold(ansi.fg.magenta(`  🤖  ${agentName}`));
+  const spinner = ansi.dim(ansi.fg.magenta(' ⟳ '));
+
+  if (ev.type === 'tool.execution_start') {
+    const toolName = d.toolName || 'tool';
+    const argStr = summariseArgs(d.arguments);
+    const detail = argStr ? ` — ${truncate(argStr, 60)}` : '';
+    return prefix + spinner + ansi.fg.yellow(toolName) + ansi.dim(ansi.fg.yellow(detail));
+  }
+
+  if (ev.type === 'assistant.message') {
+    const msg = truncate(d.content || '', 70);
+    if (msg) return prefix + spinner + ansi.dim(ansi.fg.white(msg));
+    return null; // empty assistant message, don't update status
+  }
+
+  // tool.execution_complete — don't update the status line
+  return null;
+}
+
 /* ================================================================
    Playback Engine — with snapshots, filtering, batched rendering
    ================================================================ */
@@ -832,6 +868,15 @@ class PlaybackEngine {
     this._renderCache = [];
     // Index of user.message events for turn navigation
     this._userMessageIndices = [];
+
+    // Sub-agent collapsing: parentToolCallId → { agentName, indices[] }
+    this._subagentGroups = {};
+    // Set of renderable-event indices that are sub-agent children
+    this._subagentChildIndices = new Set();
+    // Tracks the last rendered status line per agent group during live playback
+    this._subagentLastStatus = {};
+    // Flag for newline management during live playback
+    this._lastWasSubagentChild = false;
   }
 
   load(events) {
@@ -846,6 +891,7 @@ class PlaybackEngine {
         _toolCallIdMap[ev.data.toolCallId] = ev.data.toolName;
       }
     }
+    this._buildSubagentGroups();
     this._buildCaches();
     this.terminal.clear();
     this.terminal.reset();
@@ -895,6 +941,8 @@ class PlaybackEngine {
   stop() {
     this.pause();
     this.currentIndex = -1;
+    this._subagentLastStatus = {};
+    this._lastWasSubagentChild = false;
     this.terminal.clear();
     this.terminal.reset();
     this._notify();
@@ -954,6 +1002,45 @@ class PlaybackEngine {
 
   /* ── Internal: caching ──────────────────────────────────── */
 
+  /**
+   * Build sub-agent group data.  For each parentToolCallId, we find:
+   * - the agent name (from the matching subagent.started event)
+   * - all renderable-event indices that are children of that agent
+   */
+  _buildSubagentGroups() {
+    this._subagentGroups = {};
+    this._subagentChildIndices = new Set();
+    this._subagentLastStatus = {};
+
+    // Map toolCallId → agent display name from subagent.started events
+    const agentNames = {};
+    for (const ev of this.events) {
+      if (ev.type === 'subagent.started' && ev.data.toolCallId) {
+        agentNames[ev.data.toolCallId] = ev.data.agentDisplayName || ev.data.agentName || 'agent';
+      }
+      // Also resolve from 'task' tool calls (which spawn sub-agents)
+      if (ev.type === 'tool.execution_start' && ev.data.toolName === 'task' && ev.data.toolCallId) {
+        const args = ev.data.arguments || {};
+        agentNames[ev.data.toolCallId] = args.description || args.agent_type || 'task agent';
+      }
+    }
+
+    for (let i = 0; i < this.renderableEvents.length; i++) {
+      const ev = this.renderableEvents[i];
+      if (isSubagentChild(ev)) {
+        const pid = ev.data.parentToolCallId;
+        if (!this._subagentGroups[pid]) {
+          this._subagentGroups[pid] = {
+            agentName: agentNames[pid] || 'agent',
+            indices: [],
+          };
+        }
+        this._subagentGroups[pid].indices.push(i);
+        this._subagentChildIndices.add(i);
+      }
+    }
+  }
+
   _buildCaches() {
     this._snapshots.clear();
     this._renderCache = new Array(this.renderableEvents.length);
@@ -991,6 +1078,19 @@ class PlaybackEngine {
       }
     }
 
+    // Sub-agent child events: produce a compact status line instead of full rendering
+    if (this._subagentChildIndices.has(index)) {
+      const ev2 = this.renderableEvents[index];
+      const pid = ev2.data.parentToolCallId;
+      const group = this._subagentGroups[pid];
+      if (group) {
+        const status = subagentStatusLine(ev2, group.agentName);
+        // null means "no visual update for this event" (e.g. tool completion)
+        this._renderCache[index] = status;
+        return status;
+      }
+    }
+
     const renderer = STYLE_MAP[ev.type];
     if (!renderer) { this._renderCache[index] = null; return null; }
 
@@ -1002,6 +1102,32 @@ class PlaybackEngine {
   /* ── Internal: rendering ────────────────────────────────── */
 
   _renderSingleEvent(index) {
+    const ev = this.renderableEvents[index];
+
+    // Sub-agent child: overwrite previous status line
+    if (ev && this._subagentChildIndices.has(index)) {
+      const pid = ev.data.parentToolCallId;
+      const output = this._getRenderedOutput(index);
+      if (output === null || output === undefined) return;
+
+      if (this._subagentLastStatus[pid]) {
+        // Overwrite: clear line, carriage return, write new status
+        this.terminal.write(`\x1b[2K\r${output}`);
+      } else {
+        // First status line for this agent — write without newline so we can overwrite
+        this.terminal.write(`\r\n${output}`);
+      }
+      this._subagentLastStatus[pid] = output;
+      this._lastWasSubagentChild = true;
+      return;
+    }
+
+    // If previous render was a sub-agent status (no trailing newline), close it
+    if (this._lastWasSubagentChild) {
+      this.terminal.writeln('');
+      this._lastWasSubagentChild = false;
+    }
+
     const output = this._getRenderedOutput(index);
     if (output === null || output === undefined) return;
     for (const line of output.split('\r\n')) {
@@ -1023,6 +1149,25 @@ class PlaybackEngine {
 
     this.terminal.clear();
     this.terminal.reset();
+    // Reset sub-agent tracking for replay
+    this._subagentLastStatus = {};
+    this._lastWasSubagentChild = false;
+
+    // Pre-compute: for each sub-agent group, find the last child index
+    // that is <= `index` and has a non-null status line.  Only that one
+    // gets rendered in the replay buffer (collapsed view).
+    const lastChildForGroup = {};
+    for (const [pid, group] of Object.entries(this._subagentGroups)) {
+      let last = -1;
+      for (const ci of group.indices) {
+        if (ci > index) break;
+        if (ci < startFrom) continue;
+        const ev = this.renderableEvents[ci];
+        const status = subagentStatusLine(ev, group.agentName);
+        if (status !== null) last = ci;
+      }
+      if (last >= 0) lastChildForGroup[pid] = last;
+    }
 
     // Build buffer for all events from startFrom to index
     const parts = [];
@@ -1031,18 +1176,29 @@ class PlaybackEngine {
     }
 
     for (let i = startFrom; i <= index; i++) {
+      const ev = this.renderableEvents[i];
+
+      // Sub-agent child: only render the last status line per group
+      if (ev && this._subagentChildIndices.has(i)) {
+        const pid = ev.data.parentToolCallId;
+        if (lastChildForGroup[pid] === i) {
+          const output = this._getRenderedOutput(i);
+          if (output) {
+            parts.push('\r\n');
+            parts.push(output);
+          }
+        }
+        // Skip all other child events for this group
+        continue;
+      }
+
       const output = this._getRenderedOutput(i);
       if (output === null || output === undefined) continue;
-      // Add newline separator between events (or before first event if needed to match style)
-      // _renderSingleEvent adds a newline via writeln('') on the empty string from split.
-      // output starts with \r\n usually.
-      // To match exactly, we want \r\n + output.
       parts.push('\r\n');
       parts.push(output);
 
       // Save snapshot at interval boundaries
       if (i > 0 && i % SNAPSHOT_INTERVAL === 0 && !this._snapshots.has(i)) {
-        // Limit snapshot cache size to avoid OOM on large sessions
         if (this._snapshots.size > 50) {
           const firstKey = this._snapshots.keys().next().value;
           this._snapshots.delete(firstKey);
@@ -1054,7 +1210,10 @@ class PlaybackEngine {
     // Write entire buffer at once for performance
     const fullBuffer = parts.join('');
     if (fullBuffer) {
-      this.terminal.write(fullBuffer);
+      this.terminal.write(fullBuffer, () => {
+        // Delay scroll slightly to ensure xterm has finished layout
+        setTimeout(() => this.terminal.scrollToBottom(), 50);
+      });
     }
 
     // Save snapshot at current position if appropriate
@@ -1160,6 +1319,10 @@ class EventSearcher {
     const events = this.engine.renderableEvents;
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
+
+      // Skip sub-agent child events (they're collapsed in the UI)
+      if (this.engine._subagentChildIndices.has(i)) continue;
+
       // Skip if category is filtered out (display filter)
       const category = EVENT_CATEGORIES[ev.type];
       if (category && !this.engine.filters[category]) continue;
